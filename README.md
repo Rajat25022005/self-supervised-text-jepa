@@ -73,9 +73,3 @@ Unrelated: "The stock market..."  (Cosine Sim: 0.54 )
 Research Engineering / Self-Supervised Learning
 
 ---
-
-### How to use this for your career:
-
-1.  **Pin this repo** to your GitHub profile.
-2.  **The Impact:** When an interviewer asks, "Have you worked with Transformers?", you say:
-    *   *"Yes, but I went deeper than just `.generate()`. I built a Non-Contrastive JEPA architecture from scratch to understand how Latent Space alignment works, tackling challenges like representation collapse using Momentum Encoders."*
