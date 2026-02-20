@@ -1,1 +1,21 @@
-# Base configuration for T-JEPA training
+model:
+  encoder_name: distilbert-base-uncased
+  proj_dim: 512
+
+mask:
+  type: span
+  ratio: 0.15
+  min_span: 3
+  max_span: 8
+
+training:
+  batch_size: 64
+  lr: 3e-4
+  weight_decay: 1e-4
+  max_steps: 10000
+  ema_momentum: 0.996
+  precision: bf16
+
+data:
+  dataset: wikitext
+  max_length: 128

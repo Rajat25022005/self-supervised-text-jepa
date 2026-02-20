@@ -1,1 +1,2 @@
-# Logging utilities for training and evaluation
+def log(step, loss):
+    print(f"[Step {step}] Loss: {loss:.4f}")

@@ -1,1 +1,2 @@
-# Distributed training utilities (DDP, SLURM, multi-GPU)
+def is_main_process():
+    return True
