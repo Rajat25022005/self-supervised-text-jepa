@@ -1,1 +1,40 @@
 # Configuration for DistilBERT-based T-JEPA
+model:
+  encoder_name: distilbert-base-uncased
+  hidden_size: 768
+  proj_dim: 256
+  predictor_hidden_dim: 512
+
+mask:
+  type: span
+  ratio: 0.15
+  min_span: 3
+  max_span: 8
+  num_spans: 4
+
+training:
+  batch_size: 128
+  lr: 1.5e-4
+  weight_decay: 0.05
+  max_steps: 50000
+  warmup_steps: 1000
+  grad_clip: 1.0
+  ema_momentum_start: 0.990
+  ema_momentum_end: 0.9999
+  precision: bf16
+  log_every: 50
+  save_every: 5000
+  checkpoint_dir: checkpoints/distilbert/
+
+data:
+  dataset: wikitext
+  dataset_config: wikitext-103-raw-v1
+  max_length: 128
+  num_workers: 4
+
+# Notes on DistilBERT for T-JEPA:
+# - 6 layers, 768 hidden, 12 heads (half of BERT-base depth)
+# - 66M parameters total, fast to fine-tune
+# - No token_type_ids (unlike full BERT) — good, one less thing to handle
+# - Pretrained on BookCorpus + Wikipedia with distillation from BERT
+# - Our SSL pretraining on top teaches it JEPA-style semantic prediction

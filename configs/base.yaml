@@ -1,21 +1,32 @@
 model:
-  encoder_name: distilbert-base-uncased
-  proj_dim: 512
+  encoder_name: distilbert-base-uncased   # Hugging Face model ID
+  hidden_size: 768                         # DistilBERT hidden dim (auto-read by encoder)
+  proj_dim: 256                            # Projection head output dim (latent space size)
+  predictor_hidden_dim: 512               # Predictor MLP hidden layer width
 
 mask:
-  type: span
-  ratio: 0.15
-  min_span: 3
-  max_span: 8
+  type: span                              # Span-level masking (better than random token)
+  ratio: 0.15                             # Mask ~15% of tokens per sequence
+  min_span: 3                             # Minimum consecutive tokens per span
+  max_span: 8                             # Maximum consecutive tokens per span
+  num_spans: 4                            # Number of spans to mask per sentence
 
 training:
-  batch_size: 64
-  lr: 3e-4
-  weight_decay: 1e-4
-  max_steps: 10000
-  ema_momentum: 0.996
-  precision: bf16
+  batch_size: 128                         # L4 has 24GB VRAM — 128 fits comfortably with BF16
+  lr: 1.5e-4                              # Peak learning rate (after warmup)
+  weight_decay: 0.05                      # AdamW regularization
+  max_steps: 50000                        # Total training steps
+  warmup_steps: 1000                      # Linear LR warmup steps
+  grad_clip: 1.0                          # Gradient clipping norm
+  ema_momentum_start: 0.990              # EMA momentum at step 0
+  ema_momentum_end: 0.9999               # EMA momentum at max_steps (cosine schedule)
+  precision: bf16                         # BF16 for L4 Ada tensor cores
+  log_every: 50                           # Print/log every N steps
+  save_every: 5000                        # Save checkpoint every N steps
+  checkpoint_dir: checkpoints/            # Where to save model weights
 
 data:
-  dataset: wikitext
-  max_length: 128
+  dataset: wikitext                       # HuggingFace dataset name
+  dataset_config: wikitext-103-raw-v1    # Larger split for better pretraining
+  max_length: 128                         # Token sequence length
+  num_workers: 4                          # DataLoader workers (L4 instance usually has 8+ cores)

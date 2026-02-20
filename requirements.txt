@@ -1,9 +1,26 @@
-# Python dependencies for T-JEPA
-torch>=2.2
-transformers>=4.37
-datasets
-lightning
-einops
-pyyaml
-scikit-learn
-tqdm
+# ── Core deep learning ────────────────────────────────────────────────────────
+torch>=2.2.0                    # BF16 + FlashAttention support requires 2.x
+torchvision>=0.17.0
+
+# ── HuggingFace stack ─────────────────────────────────────────────────────────
+transformers>=4.38.0            # AutoModel, AutoTokenizer, DistilBERT
+datasets>=2.18.0                # WikiText loader, HF datasets API
+tokenizers>=0.15.0              # Rust-based fast tokenizer (speeds up DataLoader)
+huggingface-hub>=0.21.0
+
+# ── Experiment management ─────────────────────────────────────────────────────
+wandb>=0.16.0                   # Training dashboard (loss curves, embeddings)
+pyyaml>=6.0                     # Config file parsing
+
+# ── Compute utilities ─────────────────────────────────────────────────────────
+einops>=0.7.0                   # Clean tensor rearrange ops
+tqdm>=4.66.0                    # Progress bars
+
+# ── Evaluation / Analysis ─────────────────────────────────────────────────────
+scikit-learn>=1.4.0             # Linear probe eval, PCA, cosine metrics
+numpy>=1.26.0
+matplotlib>=3.8.0               # Embedding visualization plots
+
+# ── Install command for L4 on GCP (CUDA 12.1):
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# pip install -r requirements.txt

@@ -1,1 +1,32 @@
-# Debug configuration for rapid iteration and testing
+model:
+  encoder_name: distilbert-base-uncased
+  hidden_size: 768
+  proj_dim: 128                           # Smaller latent dim for speed
+  predictor_hidden_dim: 256
+
+mask:
+  type: span
+  ratio: 0.15
+  min_span: 3
+  max_span: 8
+  num_spans: 2
+
+training:
+  batch_size: 16                          # Small batch — just checking it runs without OOM
+  lr: 1.5e-4
+  weight_decay: 0.05
+  max_steps: 200                          # Only 200 steps — full debug run in ~60 seconds
+  warmup_steps: 20
+  grad_clip: 1.0
+  ema_momentum_start: 0.990
+  ema_momentum_end: 0.9999
+  precision: bf16
+  log_every: 10
+  save_every: 9999                        # Don't save checkpoints during debug
+  checkpoint_dir: checkpoints/debug/
+
+data:
+  dataset: wikitext
+  dataset_config: wikitext-2-raw-v1      # Small dataset — loads in seconds
+  max_length: 64                          # Shorter sequences for speed
+  num_workers: 2
