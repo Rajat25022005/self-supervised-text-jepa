@@ -3,324 +3,890 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>T-JEPA · Evaluation Results</title>
+
+<!-- ── Primary Meta ─────────────────────────────────────────── -->
+<title>T-JEPA: Text Joint Embedding Predictive Architecture</title>
+<meta name="description" content="Built Meta's I-JEPA for text from scratch. 89.8% masked reconstruction quality vs DistilBERT's −19%. Self-supervised learning in latent space — no decoder, no token prediction.">
+<meta name="author" content="Rajat Malik">
+
+<!-- ── Open Graph / LinkedIn / Facebook ─────────────────────── -->
+<meta property="og:type"        content="website">
+<meta property="og:url"         content="https://rajat25022005.github.io/self-supervised-text-jepa/">
+<meta property="og:title"       content="T-JEPA: Text Joint Embedding Predictive Architecture">
+<meta property="og:description" content="Built Meta's I-JEPA for text from scratch. 89.8% masked reconstruction quality vs DistilBERT's −19%. Benchmarked across 7 tasks: retrieval, few-shot, predictive consistency, MLP probing.">
+<meta property="og:image"       content="https://rajat25022005.github.io/self-supervised-text-jepa/preview.png">
+<meta property="og:image:width"  content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt"    content="T-JEPA evaluation results dashboard showing 89.8% masked reconstruction quality">
+<meta property="og:site_name"   content="T-JEPA Research">
+
+<!-- ── Twitter / X Card ─────────────────────────────────────── -->
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:title"       content="T-JEPA: Text Joint Embedding Predictive Architecture">
+<meta name="twitter:description" content="Built Meta's I-JEPA for text. 89.8% masked reconstruction quality vs DistilBERT's −19%. 7-task benchmark.">
+<meta name="twitter:image"       content="https://rajat25022005.github.io/self-supervised-text-jepa/preview.png">
+
+<!-- ── Fonts ─────────────────────────────────────────────────── -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
 <style>
+/* ══════════════════════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════════════════════ */
 :root {
-  --bg:#060610;--s1:#0c0c20;--s2:#101028;--border:#1c1c40;
-  --proj:#a78bfa;--raw:#38bdf8;--distil:#f87171;--gold:#fbbf24;--green:#4ade80;
-  --text:#e2e8f0;--muted:#64748b;--dim:#334155;
+  --bg:      #060610;
+  --s1:      #0c0c20;
+  --s2:      #101028;
+  --border:  #1c1c40;
+  --proj:    #a78bfa;
+  --raw:     #38bdf8;
+  --distil:  #f87171;
+  --gold:    #fbbf24;
+  --green:   #4ade80;
+  --text:    #e2e8f0;
+  --muted:   #64748b;
+  --dim:     #334155;
+  --mono:    'IBM Plex Mono', monospace;
+  --sans:    'Sora', sans-serif;
 }
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;min-height:100vh;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;
-  background-image:linear-gradient(rgba(167,139,250,.04) 1px,transparent 1px),
-  linear-gradient(90deg,rgba(167,139,250,.04) 1px,transparent 1px);
-  background-size:60px 60px;pointer-events:none;z-index:0;}
-.gp{position:fixed;width:500px;height:500px;border-radius:50%;
-  background:radial-gradient(circle,rgba(167,139,250,.08) 0%,transparent 70%);
-  top:-100px;left:-100px;pointer-events:none;z-index:0;}
-.gb{position:fixed;width:400px;height:400px;border-radius:50%;
-  background:radial-gradient(circle,rgba(56,189,248,.06) 0%,transparent 70%);
-  bottom:0;right:0;pointer-events:none;z-index:0;}
-.page{max-width:1200px;margin:0 auto;padding:56px 32px;position:relative;z-index:1;}
 
-/* HEADER */
-.header{margin-bottom:64px;animation:rise .9s ease both;}
-.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--proj);border:1px solid rgba(167,139,250,.3);
-  display:inline-flex;align-items:center;gap:8px;padding:6px 14px;margin-bottom:24px;border-radius:2px;}
-.eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--proj);animation:pulse 2s infinite;}
-h1{font-size:clamp(32px,5vw,58px);font-weight:700;line-height:1.05;letter-spacing:-.03em;margin-bottom:16px;}
-h1 em{font-style:normal;color:var(--proj);}
-.subhead{color:var(--muted);font-size:15px;font-weight:300;max-width:580px;line-height:1.7;}
+/* ══════════════════════════════════════════════════════════════
+   RESET + BASE
+══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
-/* LEGEND */
-.legend{display:flex;gap:32px;flex-wrap:wrap;margin-bottom:56px;animation:rise .9s .1s ease both;}
-.leg{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;}
-.leg-pip{width:32px;height:3px;border-radius:2px;}
-.leg-dim{color:var(--muted);font-size:11px;margin-left:2px;font-family:'IBM Plex Mono',monospace;}
+html { scroll-behavior: smooth; }
 
-/* STAT CARDS */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:56px;}
-.stat-card{background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:28px 24px;
-  position:relative;overflow:hidden;animation:rise .9s ease both;}
-.stat-card::after{content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(255,255,255,.02) 0%,transparent 60%);pointer-events:none;}
-.stat-card.win{border-color:rgba(167,139,250,.35);background:linear-gradient(135deg,rgba(167,139,250,.07),var(--s1));}
-.stat-num{font-family:'IBM Plex Mono',monospace;font-size:38px;font-weight:700;line-height:1;margin-bottom:10px;}
-.sn-p{color:var(--proj);}.sn-g{color:var(--green);}.sn-r{color:var(--distil);}
-.stat-label{font-size:13px;font-weight:600;margin-bottom:6px;}
-.stat-sub{font-size:12px;color:var(--muted);line-height:1.5;}
-.stat-card:nth-child(1){animation-delay:.05s}.stat-card:nth-child(2){animation-delay:.1s}
-.stat-card:nth-child(3){animation-delay:.15s}.stat-card:nth-child(4){animation-delay:.2s}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
 
-/* SECTION */
-.section{margin-bottom:56px;animation:rise .9s ease both;}
-.section:nth-child(1){animation-delay:.05s}.section:nth-child(2){animation-delay:.1s}
-.section:nth-child(3){animation-delay:.15s}.section:nth-child(4){animation-delay:.2s}
-.shdr{display:flex;align-items:center;gap:16px;margin-bottom:28px;}
-.stag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
-  color:#000;background:var(--proj);padding:4px 10px;border-radius:2px;font-weight:600;flex-shrink:0;}
-.stag.b{background:var(--raw);}.stag.r{background:var(--distil);}.stag.g{background:var(--gold);}
-.sname{font-size:17px;font-weight:600;}
-.srule{flex:1;height:1px;background:var(--border);}
+/* animated grid */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(167,139,250,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167,139,250,.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none; z-index: 0;
+}
 
-/* CHARTS */
-.cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
-.cc{background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:22px 22px 24px;transition:border-color .2s;}
-.cc:hover{border-color:rgba(167,139,250,.3);}
-.clabel{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
-.cdir{color:var(--dim);font-size:9px;}
+/* glows */
+.glow {
+  position: fixed; border-radius: 50%; pointer-events: none; z-index: 0;
+}
+.glow-1 {
+  width: 600px; height: 600px; top: -150px; left: -150px;
+  background: radial-gradient(circle, rgba(167,139,250,.07) 0%, transparent 70%);
+}
+.glow-2 {
+  width: 500px; height: 500px; bottom: -100px; right: -100px;
+  background: radial-gradient(circle, rgba(56,189,248,.05) 0%, transparent 70%);
+}
 
-/* BARS */
-.bars{display:flex;flex-direction:column;gap:12px;}
-.brow{display:grid;grid-template-columns:100px 1fr 20px;align-items:center;gap:10px;}
-.bname{font-size:11px;font-weight:500;color:var(--muted);font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
-.btrack{height:24px;background:var(--s2);border-radius:3px;overflow:hidden;}
-.bfill{height:100%;border-radius:3px;width:0;transition:width 1.4s cubic-bezier(.22,.61,.36,1);
-  display:flex;align-items:center;justify-content:flex-end;padding-right:8px;}
-.bfv{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:rgba(0,0,0,.85);}
-.bneg{height:100%;border-radius:3px;background:rgba(248,113,113,.2);border:1px dashed rgba(248,113,113,.4);
-  display:flex;align-items:center;padding-left:6px;}
-.bnegv{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--distil);}
-.bwin{display:flex;align-items:center;justify-content:center;}
-.star{color:var(--gold);font-size:12px;}
+/* ══════════════════════════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════════════════════════ */
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 28px 80px;
+  position: relative; z-index: 1;
+}
 
-/* RADAR */
-.rwrap{background:var(--s1);border:1px solid var(--border);border-radius:6px;padding:32px;
-  display:flex;flex-direction:column;align-items:center;margin-bottom:56px;}
-.rtitle{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:24px;align-self:flex-start;}
-canvas{display:block;}
+/* ══════════════════════════════════════════════════════════════
+   NAV
+══════════════════════════════════════════════════════════════ */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(6,6,16,.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
 
-/* INSIGHTS */
-.insights{background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--proj);
-  border-radius:6px;padding:32px;margin-bottom:56px;}
-.ititle{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--proj);margin-bottom:20px;}
-.ilist{display:flex;flex-direction:column;gap:16px;}
-.insight{display:grid;grid-template-columns:24px 1fr;gap:12px;align-items:start;}
-.inum{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--proj);font-weight:700;margin-top:1px;}
-.itext{font-size:14px;color:var(--text);line-height:1.65;}
-.itext strong{color:var(--green);}.itext em{font-style:normal;color:var(--distil);}.itext b{color:var(--proj);font-weight:600;}
+.nav-inner {
+  max-width: 1100px; margin: 0 auto;
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+}
 
-/* FOOTER */
-.footer{display:flex;justify-content:space-between;align-items:center;padding-top:24px;border-top:1px solid var(--border);}
-.fl{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);}
-.fr{display:flex;gap:12px;}
-.chip{font-family:'IBM Plex Mono',monospace;font-size:10px;background:var(--s2);border:1px solid var(--border);
-  padding:4px 10px;border-radius:2px;color:var(--muted);}
+.nav-logo {
+  font-family: var(--mono); font-size: 14px; font-weight: 700;
+  color: var(--proj); letter-spacing: .05em; text-decoration: none;
+}
 
-@keyframes rise{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-@media(max-width:700px){.stats-row{grid-template-columns:1fr 1fr;}.brow{grid-template-columns:80px 1fr 16px;}}
+.nav-links {
+  display: flex; gap: 24px; list-style: none;
+}
+
+.nav-links a {
+  font-size: 12px; font-weight: 500; color: var(--muted);
+  text-decoration: none; letter-spacing: .05em;
+  transition: color .2s;
+}
+.nav-links a:hover { color: var(--text); }
+
+.btn {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 8px 18px; border-radius: 3px; text-decoration: none;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 8px;
+}
+
+.btn-outline {
+  border: 1px solid var(--proj); color: var(--proj);
+  background: transparent;
+}
+.btn-outline:hover { background: rgba(167,139,250,.1); }
+
+.btn-solid {
+  background: var(--proj); color: #000; border: 1px solid var(--proj);
+}
+.btn-solid:hover { background: #c4b5fd; }
+
+/* ══════════════════════════════════════════════════════════════
+   HERO
+══════════════════════════════════════════════════════════════ */
+.hero {
+  padding: 96px 0 80px;
+  animation: rise .9s ease both;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--proj);
+  border: 1px solid rgba(167,139,250,.3);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; margin-bottom: 28px; border-radius: 2px;
+}
+.hero-eyebrow::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--proj); animation: pulse 2s infinite;
+}
+
+.hero h1 {
+  font-size: clamp(36px, 6vw, 68px);
+  font-weight: 700; line-height: 1.02; letter-spacing: -.03em;
+  margin-bottom: 20px;
+}
+.hero h1 em { font-style: normal; color: var(--proj); }
+
+.hero-sub {
+  font-size: clamp(15px, 2vw, 18px); font-weight: 300;
+  color: var(--muted); max-width: 600px; line-height: 1.7;
+  margin-bottom: 40px;
+}
+
+.hero-ctas {
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CONCEPT EXPLAINER
+══════════════════════════════════════════════════════════════ */
+.concept {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin-bottom: 80px;
+  animation: rise .9s .1s ease both;
+}
+
+.concept-card {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 28px;
+}
+
+.concept-card.dim-card { opacity: .55; }
+.concept-card.highlight-card { border-color: rgba(167,139,250,.4); }
+
+.concept-tag {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .15em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 2px;
+  margin-bottom: 16px; display: inline-block; font-weight: 600;
+}
+.tag-old { background: var(--dim); color: var(--muted); }
+.tag-new { background: var(--proj); color: #000; }
+
+.concept-card h3 {
+  font-size: 16px; font-weight: 600; margin-bottom: 10px;
+}
+.concept-card p {
+  font-size: 14px; color: var(--muted); line-height: 1.65;
+}
+
+.concept-arrow {
+  display: flex; align-items: center; justify-content: center;
+  grid-column: 1/-1; color: var(--proj);
+  font-size: 28px; margin: -4px 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HEADLINE STATS
+══════════════════════════════════════════════════════════════ */
+.stats-grid {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 14px;
+  margin-bottom: 80px;
+  animation: rise .9s .15s ease both;
+}
+
+.stat-card {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 26px 22px;
+  position: relative; overflow: hidden;
+}
+.stat-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.02), transparent 60%);
+  pointer-events: none;
+}
+.stat-card.featured {
+  border-color: rgba(167,139,250,.4);
+  background: linear-gradient(135deg, rgba(167,139,250,.07), var(--s1));
+}
+
+.stat-num {
+  font-family: var(--mono); font-size: 40px; font-weight: 700;
+  line-height: 1; margin-bottom: 10px;
+}
+.sn-p { color: var(--proj); }
+.sn-g { color: var(--green); }
+.sn-r { color: var(--distil); }
+.sn-b { color: var(--raw); }
+
+.stat-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.stat-sub   { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ══════════════════════════════════════════════════════════════
+   SECTION HEADER
+══════════════════════════════════════════════════════════════ */
+.section { margin-bottom: 72px; animation: rise .9s ease both; }
+
+.sec-hdr {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 28px;
+}
+.sec-tag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: #000; font-weight: 700;
+  padding: 4px 10px; border-radius: 2px; flex-shrink: 0;
+}
+.sec-tag.p  { background: var(--proj); }
+.sec-tag.b  { background: var(--raw); }
+.sec-tag.g  { background: var(--gold); }
+.sec-tag.r  { background: var(--distil); }
+.sec-name   { font-size: 17px; font-weight: 600; }
+.sec-rule   { flex: 1; height: 1px; background: var(--border); }
+
+/* ══════════════════════════════════════════════════════════════
+   CHART GRID + BAR CHARTS
+══════════════════════════════════════════════════════════════ */
+.cgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.cc {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 20px 22px 24px;
+  transition: border-color .2s;
+}
+.cc:hover { border-color: rgba(167,139,250,.3); }
+
+.cc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 18px;
+}
+.cc-dir { color: var(--dim); font-size: 9px; }
+
+.bars { display: flex; flex-direction: column; gap: 11px; }
+
+.brow {
+  display: grid;
+  grid-template-columns: 96px 1fr 18px;
+  align-items: center; gap: 10px;
+}
+
+.bname {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  color: var(--muted); white-space: nowrap;
+}
+
+.btrack {
+  height: 22px; background: var(--s2); border-radius: 3px; overflow: hidden;
+}
+
+.bfill {
+  height: 100%; border-radius: 3px; width: 0;
+  transition: width 1.4s cubic-bezier(.22,.61,.36,1);
+  display: flex; align-items: center;
+  justify-content: flex-end; padding-right: 7px;
+}
+
+.bfv {
+  font-family: var(--mono); font-size: 10px;
+  font-weight: 700; color: rgba(0,0,0,.85);
+}
+
+.bneg {
+  height: 100%; border-radius: 3px;
+  background: rgba(248,113,113,.18);
+  border: 1px dashed rgba(248,113,113,.4);
+  display: flex; align-items: center; padding-left: 7px;
+}
+.bnegv {
+  font-family: var(--mono); font-size: 10px; color: var(--distil);
+}
+
+.bwin { display: flex; align-items: center; justify-content: center; }
+.star { color: var(--gold); font-size: 12px; }
+
+/* ══════════════════════════════════════════════════════════════
+   LEGEND
+══════════════════════════════════════════════════════════════ */
+.legend {
+  display: flex; gap: 28px; flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+.leg { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500; }
+.leg-pip { width: 28px; height: 3px; border-radius: 2px; }
+.leg-dim {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--muted); margin-left: 2px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RADAR
+══════════════════════════════════════════════════════════════ */
+.radar-wrap {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 32px 24px;
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 72px;
+}
+.radar-title {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 24px; align-self: flex-start;
+}
+canvas { display: block; max-width: 100%; }
+
+/* ══════════════════════════════════════════════════════════════
+   INSIGHTS
+══════════════════════════════════════════════════════════════ */
+.insights {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--proj);
+  border-radius: 6px; padding: 32px;
+  margin-bottom: 72px;
+  animation: rise .9s .3s ease both;
+}
+.ins-title {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .15em;
+  text-transform: uppercase; color: var(--proj); margin-bottom: 24px;
+}
+.ilist { display: flex; flex-direction: column; gap: 18px; }
+.insight {
+  display: grid; grid-template-columns: 28px 1fr;
+  gap: 14px; align-items: start;
+}
+.inum {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--proj); font-weight: 700; margin-top: 2px;
+}
+.itext { font-size: 14px; color: var(--text); line-height: 1.7; }
+.itext strong { color: var(--green); }
+.itext em     { font-style: normal; color: var(--distil); }
+.itext b      { color: var(--proj); font-weight: 600; }
+
+/* ══════════════════════════════════════════════════════════════
+   ARCHITECTURE SECTION
+══════════════════════════════════════════════════════════════ */
+.arch-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 14px;
+  margin-bottom: 72px;
+}
+.arch-card {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: 6px; padding: 24px;
+}
+.arch-icon {
+  font-size: 28px; margin-bottom: 14px;
+}
+.arch-card h4 {
+  font-size: 14px; font-weight: 600; margin-bottom: 8px;
+}
+.arch-card p {
+  font-size: 13px; color: var(--muted); line-height: 1.6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TECH STACK
+══════════════════════════════════════════════════════════════ */
+.stack {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 72px;
+}
+.chip {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--s1); border: 1px solid var(--border);
+  padding: 6px 14px; border-radius: 3px; color: var(--muted);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════════════════════════ */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 28px 0 0;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 16px;
+}
+.footer-l {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+.footer-links {
+  display: flex; gap: 20px;
+}
+.footer-links a {
+  font-size: 12px; color: var(--muted); text-decoration: none;
+  transition: color .2s;
+}
+.footer-links a:hover { color: var(--proj); }
+
+/* ══════════════════════════════════════════════════════════════
+   ANIMATIONS
+══════════════════════════════════════════════════════════════ */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .35; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .concept      { grid-template-columns: 1fr; }
+  .concept-arrow { display: none; }
+  .stats-grid   { grid-template-columns: 1fr 1fr; }
+  .arch-grid    { grid-template-columns: 1fr; }
+  .brow         { grid-template-columns: 80px 1fr 16px; }
+  nav .nav-links { display: none; }
+}
+@media (max-width: 480px) {
+  .stats-grid   { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
-<div class="gp"></div><div class="gb"></div>
+
+<div class="glow glow-1"></div>
+<div class="glow glow-2"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="#">T-JEPA</a>
+    <ul class="nav-links">
+      <li><a href="#results">Results</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#insights">Insights</a></li>
+    </ul>
+    <a class="btn btn-solid" href="https://github.com/Rajat25022005/self-supervised-text-jepa" target="_blank" rel="noopener">
+      ↗ GitHub
+    </a>
+  </div>
+</nav>
+
 <div class="page">
 
-<div class="header">
-  <div class="eyebrow">Research · Self-Supervised Learning · NLP</div>
-  <h1>T-<em>JEPA</em><br>Evaluation Results</h1>
-  <p class="subhead">Extended 7-task benchmark across retrieval, few-shot classification, predictive consistency, and nonlinear probing. DistilBERT backbone · 50k steps · NVIDIA L4.</p>
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">Self-Supervised Learning · NLP · Research 2026</div>
+  <h1>Text <em>JEPA</em></h1>
+  <p class="hero-sub">
+    A text adaptation of Meta's Joint Embedding Predictive Architecture. Instead of predicting masked words, T-JEPA predicts masked <em style="font-style:italic;color:var(--proj)">meaning vectors</em> in latent space — forcing the model to learn semantics, not syntax.
+  </p>
+  <div class="hero-ctas">
+    <a class="btn btn-solid" href="https://github.com/Rajat25022005/self-supervised-text-jepa" target="_blank" rel="noopener">↗ View on GitHub</a>
+    <a class="btn btn-outline" href="#results">See Results</a>
+  </div>
+</section>
+
+<!-- CONCEPT -->
+<div class="concept">
+  <div class="concept-card dim-card">
+    <div class="concept-tag tag-old">BERT / MLM</div>
+    <h3>Predict masked tokens</h3>
+    <p>"The capital of France is [MASK]" → predict the word <strong>"Paris"</strong>. Model learns vocabulary distributions and surface-level syntax patterns.</p>
+  </div>
+  <div class="concept-card highlight-card">
+    <div class="concept-tag tag-new">T-JEPA</div>
+    <h3>Predict masked meaning vectors</h3>
+    <p>"The capital of France is [MASK]" → predict a <strong>vector</strong> representing {European Capital, City, Culture} — without ever decoding to tokens. Forces semantic learning.</p>
+  </div>
 </div>
 
-<div class="legend">
-  <div class="leg"><div class="leg-pip" style="background:var(--proj)"></div><span>T-JEPA projected</span><span class="leg-dim">256-dim</span></div>
-  <div class="leg"><div class="leg-pip" style="background:var(--raw)"></div><span>T-JEPA raw</span><span class="leg-dim">768-dim</span></div>
-  <div class="leg"><div class="leg-pip" style="background:var(--distil)"></div><span>DistilBERT</span><span class="leg-dim">baseline</span></div>
-</div>
-
-<div class="stats-row">
-  <div class="stat-card win">
+<!-- HEADLINE STATS -->
+<div class="stats-grid">
+  <div class="stat-card featured">
     <div class="stat-num sn-p">89.8%</div>
     <div class="stat-label">Masked Recon Quality</div>
-    <div class="stat-sub">T-JEPA directly trained to predict masked spans in latent space. DistilBERT scores −19% — worse than random.</div>
+    <div class="stat-sub">T-JEPA directly trained to predict masked spans in latent space. DistilBERT scores −19% — worse than random — because MLM never trains this objective.</div>
   </div>
   <div class="stat-card">
     <div class="stat-num sn-p">6×</div>
-    <div class="stat-label">Semantic Gap vs Baseline</div>
-    <div class="stat-sub">T-JEPA gap 0.084 vs DistilBERT 0.014 on MRPC paraphrase pairs — far richer semantic geometry.</div>
+    <div class="stat-label">Semantic Gap</div>
+    <div class="stat-sub">Paraphrase separation: T-JEPA gap 0.084 vs DistilBERT 0.014 on MRPC pairs. Richer semantic geometry in projected space.</div>
   </div>
   <div class="stat-card">
-    <div class="stat-num sn-r">83%</div>
-    <div class="stat-label">DistilBERT MLP Probe</div>
-    <div class="stat-sub">Baseline wins classification — pretrained on 30× more data (16 GB BookCorpus + Wikipedia).</div>
+    <div class="stat-num sn-g">50k</div>
+    <div class="stat-label">Training Steps</div>
+    <div class="stat-sub">Trained on WikiText-103 (~500 MB). DistilBERT used 16 GB — a 30× data gap that explains classification differences, not architecture flaws.</div>
   </div>
   <div class="stat-card">
-    <div class="stat-num sn-g">1.40×</div>
-    <div class="stat-label">Discriminability Ratio</div>
-    <div class="stat-sub">T-JEPA projected space separates related/unrelated pairs better than raw hidden states.</div>
+    <div class="stat-num sn-b">256</div>
+    <div class="stat-label">Latent Dim</div>
+    <div class="stat-sub">JEPA projection head maps 768-dim DistilBERT hidden states to 256-dim latent space where the training signal is applied.</div>
   </div>
 </div>
 
-<!-- A: RETRIEVAL -->
-<div class="section">
-  <div class="shdr"><div class="stag">A</div><div class="sname">Retrieval — Recall@K &amp; Mean Average Precision</div><div class="srule"></div></div>
-  <div class="cgrid">
-    <div class="cc"><div class="clabel">Recall@1 <span class="cdir">↑ higher = better</span></div><div class="bars" id="r1"></div></div>
-    <div class="cc"><div class="clabel">Recall@5 <span class="cdir">↑ higher = better</span></div><div class="bars" id="r5"></div></div>
-    <div class="cc"><div class="clabel">Recall@10 <span class="cdir">↑ higher = better</span></div><div class="bars" id="r10"></div></div>
-    <div class="cc"><div class="clabel">mAP <span class="cdir">↑ higher = better</span></div><div class="bars" id="map"></div></div>
-  </div>
-</div>
+<!-- RESULTS -->
+<div id="results">
 
-<!-- B: FEW-SHOT -->
-<div class="section">
-  <div class="shdr"><div class="stag b">B</div><div class="sname">Few-Shot Classification — nearest centroid, zero trainable params</div><div class="srule"></div></div>
-  <div class="cgrid">
-    <div class="cc"><div class="clabel">1-Shot Accuracy <span class="cdir">↑ higher = better</span></div><div class="bars" id="s1"></div></div>
-    <div class="cc"><div class="clabel">5-Shot Accuracy <span class="cdir">↑ higher = better</span></div><div class="bars" id="s5"></div></div>
+  <!-- Legend -->
+  <div class="legend">
+    <div class="leg"><div class="leg-pip" style="background:var(--proj)"></div>T-JEPA projected<span class="leg-dim">256-dim</span></div>
+    <div class="leg"><div class="leg-pip" style="background:var(--raw)"></div>T-JEPA raw<span class="leg-dim">768-dim</span></div>
+    <div class="leg"><div class="leg-pip" style="background:var(--distil)"></div>DistilBERT<span class="leg-dim">baseline</span></div>
   </div>
-</div>
 
-<!-- C: PREDICTIVE CONSISTENCY -->
-<div class="section">
-  <div class="shdr"><div class="stag g">C</div><div class="sname">Predictive Consistency — JEPA-specific objective metrics</div><div class="srule"></div></div>
-  <div class="cgrid">
-    <div class="cc"><div class="clabel">Masked Recon Quality <span class="cdir">↑ 1.0=perfect</span></div><div class="bars" id="recon"></div></div>
-    <div class="cc"><div class="clabel">Discriminability Ratio <span class="cdir">↑ unrelated/related</span></div><div class="bars" id="disc"></div></div>
-    <div class="cc"><div class="clabel">Related Pair Error <span class="cdir">↓ lower = better</span></div><div class="bars" id="relerr"></div></div>
-    <div class="cc"><div class="clabel">Unrelated Pair Error <span class="cdir">↑ higher = better</span></div><div class="bars" id="unrelerr"></div></div>
+  <!-- A: Retrieval -->
+  <div class="section">
+    <div class="sec-hdr">
+      <div class="sec-tag p">A</div>
+      <div class="sec-name">Retrieval — Recall@K &amp; Mean Average Precision</div>
+      <div class="sec-rule"></div>
+    </div>
+    <div class="cgrid">
+      <div class="cc"><div class="cc-label">Recall@1 <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="r1"></div></div>
+      <div class="cc"><div class="cc-label">Recall@5 <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="r5"></div></div>
+      <div class="cc"><div class="cc-label">Recall@10 <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="r10"></div></div>
+      <div class="cc"><div class="cc-label">mAP <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="map"></div></div>
+    </div>
   </div>
-</div>
 
-<!-- D: PROBING -->
-<div class="section">
-  <div class="shdr"><div class="stag r">D</div><div class="sname">MLP Probe — 1 hidden layer, nonlinear, AG News 4-class</div><div class="srule"></div></div>
-  <div class="cgrid">
-    <div class="cc"><div class="clabel">MLP Probe Accuracy <span class="cdir">↑ higher = better</span></div><div class="bars" id="mlp"></div></div>
-    <div class="cc"><div class="clabel">Final Train Loss <span class="cdir">↓ lower = better</span></div><div class="bars" id="mlploss"></div></div>
+  <!-- B: Few-shot -->
+  <div class="section">
+    <div class="sec-hdr">
+      <div class="sec-tag b">B</div>
+      <div class="sec-name">Few-Shot Classification — nearest centroid, zero trainable params</div>
+      <div class="sec-rule"></div>
+    </div>
+    <div class="cgrid">
+      <div class="cc"><div class="cc-label">1-Shot Accuracy <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="s1"></div></div>
+      <div class="cc"><div class="cc-label">5-Shot Accuracy <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="s5"></div></div>
+    </div>
   </div>
-</div>
+
+  <!-- C: Predictive Consistency -->
+  <div class="section">
+    <div class="sec-hdr">
+      <div class="sec-tag g">C</div>
+      <div class="sec-name">Predictive Consistency — JEPA-specific objective metrics</div>
+      <div class="sec-rule"></div>
+    </div>
+    <div class="cgrid">
+      <div class="cc"><div class="cc-label">Masked Recon Quality <span class="cc-dir">↑ 1.0 = perfect</span></div><div class="bars" id="recon"></div></div>
+      <div class="cc"><div class="cc-label">Discriminability Ratio <span class="cc-dir">↑ unrelated/related error</span></div><div class="bars" id="disc"></div></div>
+      <div class="cc"><div class="cc-label">Related Pair Error <span class="cc-dir">↓ lower = better</span></div><div class="bars" id="relerr"></div></div>
+      <div class="cc"><div class="cc-label">Unrelated Pair Error <span class="cc-dir">↑ higher = better separation</span></div><div class="bars" id="unrelerr"></div></div>
+    </div>
+  </div>
+
+  <!-- D: Probing -->
+  <div class="section">
+    <div class="sec-hdr">
+      <div class="sec-tag r">D</div>
+      <div class="sec-name">MLP Probe — 1 hidden layer, nonlinear, AG News 4-class</div>
+      <div class="sec-rule"></div>
+    </div>
+    <div class="cgrid">
+      <div class="cc"><div class="cc-label">MLP Probe Accuracy <span class="cc-dir">↑ higher = better</span></div><div class="bars" id="mlp"></div></div>
+      <div class="cc"><div class="cc-label">Final Train Loss <span class="cc-dir">↓ lower = better</span></div><div class="bars" id="mlploss"></div></div>
+    </div>
+  </div>
+
+</div><!-- /results -->
 
 <!-- RADAR -->
-<div class="rwrap">
-  <div class="rtitle">// Normalised radar — all key metrics at a glance</div>
-  <canvas id="radar" width="640" height="460"></canvas>
+<div class="radar-wrap">
+  <div class="radar-title">// Normalised radar — all key metrics at a glance</div>
+  <canvas id="radar" width="620" height="440"></canvas>
+</div>
+
+<!-- ARCHITECTURE -->
+<div id="architecture">
+  <div class="sec-hdr" style="margin-bottom:28px">
+    <div class="sec-tag p">ARCH</div>
+    <div class="sec-name">Architecture</div>
+    <div class="sec-rule"></div>
+  </div>
+  <div class="arch-grid" style="margin-bottom:72px">
+    <div class="arch-card">
+      <div class="arch-icon">🎓</div>
+      <h4>Context Encoder (Student)</h4>
+      <p>DistilBERT backbone reads <strong>masked</strong> text. Trained by backprop. Projects hidden states to 256-dim latent via LayerNorm + Linear head.</p>
+    </div>
+    <div class="arch-card">
+      <div class="arch-icon">🧊</div>
+      <h4>Target Encoder (Teacher)</h4>
+      <p>Identical architecture reads <strong>clean</strong> text. Parameters never updated by gradients — updated only via Exponential Moving Average from student. Cosine momentum: 0.990 → 0.9999.</p>
+    </div>
+    <div class="arch-card">
+      <div class="arch-icon">🔮</div>
+      <h4>Predictor MLP</h4>
+      <p>3-layer MLP with positional conditioning. Takes student latents → predicts teacher latents at masked positions. MSE loss in 256-dim latent space. No token vocabulary involved.</p>
+    </div>
+  </div>
 </div>
 
 <!-- INSIGHTS -->
-<div class="insights">
-  <div class="ititle">// Research Insights</div>
+<div id="insights" class="insights">
+  <div class="ins-title">// Research Insights</div>
   <div class="ilist">
-    <div class="insight"><div class="inum">01</div><div class="itext"><strong>Masked Reconstruction Quality: 89.8% vs −19%.</strong> This is the headline finding. T-JEPA's objective explicitly trains masked-span prediction in latent space — DistilBERT's MLM does not. A negative score confirms DistilBERT has zero ability to reconstruct masked content in embedding space. This is the metric most faithful to the JEPA training objective.</div></div>
-    <div class="insight"><div class="inum">02</div><div class="itext"><b>T-JEPA projected (256-dim) beats T-JEPA raw (768-dim) on both discriminability and reconstruction quality</b> — confirming the projection head is learning meaningful latent structure, not just compressing. The JEPA training signal lives in the projected space, as designed.</div></div>
-    <div class="insight"><div class="inum">03</div><div class="itext"><em>DistilBERT wins on retrieval, few-shot, and MLP probe.</em> Expected — pretrained on 16 GB (BookCorpus + Wikipedia) vs T-JEPA's ~500 MB WikiText-103. A 30× data gap fully explains the classification gap. The objective is not at fault — it's a compute and data story.</div></div>
-    <div class="insight"><div class="inum">04</div><div class="itext"><strong>Next: train to 200k steps on full Wikipedia.</strong> Recall@1 trajectory (0.56 at 50k) suggests parity with DistilBERT is achievable with scale. The architecture is validated — it just needs more compute.</div></div>
+    <div class="insight">
+      <div class="inum">01</div>
+      <div class="itext"><strong>Masked Reconstruction Quality: 89.8% vs −19%.</strong> Headline finding. T-JEPA's objective trains masked-span prediction in latent space directly — DistilBERT's MLM does not. Negative score confirms DistilBERT has zero ability to reconstruct masked embeddings. This metric is the most faithful test of the JEPA objective.</div>
+    </div>
+    <div class="insight">
+      <div class="inum">02</div>
+      <div class="itext"><b>T-JEPA projected (256-dim) beats T-JEPA raw (768-dim)</b> on both reconstruction quality and discriminability — confirming the projection head is learning structure, not just compressing. The JEPA training signal lives in the projected latent space, as designed.</div>
+    </div>
+    <div class="insight">
+      <div class="inum">03</div>
+      <div class="itext"><em>DistilBERT wins retrieval, few-shot, and MLP probe.</em> Expected — it was pretrained on 16 GB (BookCorpus + Wikipedia) vs T-JEPA's ~500 MB WikiText-103. A 30× data gap fully explains the classification delta. The objective is not at fault — this is purely a compute and data story.</div>
+    </div>
+    <div class="insight">
+      <div class="inum">04</div>
+      <div class="itext"><strong>Next steps: train to 200k steps on full Wikipedia.</strong> Recall@1 trajectory (0.56 at 50k steps) suggests parity with DistilBERT is achievable with scale. Architecture is validated — it just needs more compute and data to close the gap.</div>
+    </div>
   </div>
 </div>
 
-<div class="footer">
-  <div class="fl">T-JEPA · Rajat Malik · 2026</div>
-  <div class="fr">
-    <div class="chip">50k steps</div><div class="chip">NVIDIA L4</div>
-    <div class="chip">DistilBERT backbone</div><div class="chip">WikiText-103</div>
+<!-- STACK -->
+<div class="section">
+  <div class="sec-hdr">
+    <div class="sec-tag p">STACK</div>
+    <div class="sec-name">Built With</div>
+    <div class="sec-rule"></div>
+  </div>
+  <div class="stack">
+    <div class="chip">PyTorch 2.2+</div>
+    <div class="chip">HuggingFace Transformers</div>
+    <div class="chip">DistilBERT backbone</div>
+    <div class="chip">WikiText-103</div>
+    <div class="chip">NVIDIA L4 (24 GB)</div>
+    <div class="chip">BF16 Mixed Precision</div>
+    <div class="chip">Flash Attention</div>
+    <div class="chip">EMA Momentum</div>
+    <div class="chip">scikit-learn eval</div>
+    <div class="chip">GLUE MRPC</div>
+    <div class="chip">AG News</div>
   </div>
 </div>
-</div>
 
+<!-- FOOTER -->
+<footer>
+  <div class="footer-l">T-JEPA · Rajat Malik · 2026 · MIT License</div>
+  <div class="footer-links">
+    <a href="https://github.com/Rajat25022005/self-supervised-text-jepa" target="_blank" rel="noopener">GitHub →</a>
+    <a href="https://github.com/Rajat25022005/self-supervised-text-jepa/blob/main/README.md" target="_blank" rel="noopener">README →</a>
+  </div>
+</footer>
+
+</div><!-- /page -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT — bar charts + radar
+══════════════════════════════════════════════════════════════ -->
 <script>
-const M=[
-  {key:'proj',  label:'T-JEPA (proj)', color:'#a78bfa'},
-  {key:'raw',   label:'T-JEPA (raw)',  color:'#38bdf8'},
-  {key:'distil',label:'DistilBERT',    color:'#f87171'},
+const MODELS = [
+  { key:'proj',   label:'T-JEPA (proj)',  color:'#a78bfa' },
+  { key:'raw',    label:'T-JEPA (raw)',   color:'#38bdf8' },
+  { key:'distil', label:'DistilBERT',     color:'#f87171' },
 ];
-const D={
-  r1:     {proj:.5615,raw:.5655,distil:.841,  hi:true},
-  r5:     {proj:.888, raw:.8905,distil:.9575, hi:true},
-  r10:    {proj:.9515,raw:.9535,distil:.9795, hi:true},
-  map:    {proj:.3391,raw:.3396,distil:.5393, hi:true},
-  s1:     {proj:.3225,raw:.3363,distil:.515,  hi:true},
-  s5:     {proj:.4325,raw:.4113,distil:.745,  hi:true},
-  recon:  {proj:.8977,raw:.7962,distil:-.1904,hi:true},
-  disc:   {proj:1.396,raw:1.376,distil:1.502, hi:true},
-  relerr: {proj:.2805,raw:.3493,distil:.0595, hi:false},
-  unrelerr:{proj:.3915,raw:.4808,distil:.0894,hi:true},
-  mlp:    {proj:.55,  raw:.5625,distil:.83,   hi:true},
-  mlploss:{proj:.9872,raw:.9159,distil:.5881, hi:false},
+
+const DATA = {
+  r1:      { proj:.5615, raw:.5655, distil:.841,   hi:true  },
+  r5:      { proj:.888,  raw:.8905, distil:.9575,  hi:true  },
+  r10:     { proj:.9515, raw:.9535, distil:.9795,  hi:true  },
+  map:     { proj:.3391, raw:.3396, distil:.5393,  hi:true  },
+  s1:      { proj:.3225, raw:.3363, distil:.515,   hi:true  },
+  s5:      { proj:.4325, raw:.4113, distil:.745,   hi:true  },
+  recon:   { proj:.8977, raw:.7962, distil:-.1904, hi:true  },
+  disc:    { proj:1.396, raw:1.376, distil:1.502,  hi:true  },
+  relerr:  { proj:.2805, raw:.3493, distil:.0595,  hi:false },
+  unrelerr:{ proj:.3915, raw:.4808, distil:.0894,  hi:true  },
+  mlp:     { proj:.55,   raw:.5625, distil:.83,    hi:true  },
+  mlploss: { proj:.9872, raw:.9159, distil:.5881,  hi:false },
 };
 
-function makeBars(id,key){
-  const d=D[key], el=document.getElementById(id);
-  if(!el)return;
-  const vals=M.map(m=>d[m.key]);
-  const maxAbs=Math.max(...vals.map(Math.abs),.001);
-  const winner=d.hi
-    ? M[vals.indexOf(Math.max(...vals))].key
-    : M[vals.filter(v=>v>=0).map(v=>v).indexOf(Math.min(...vals.filter(v=>v>=0)))];
+function makeBars(containerId, dataKey) {
+  const d   = DATA[dataKey];
+  const el  = document.getElementById(containerId);
+  if (!el) return;
 
-  M.forEach((m,i)=>{
-    const v=d[m.key], pct=Math.max(0,Math.abs(v)/maxAbs*100);
-    const row=document.createElement('div');row.className='brow';
-    const nm=document.createElement('div');nm.className='bname';nm.textContent=m.label;
-    const tr=document.createElement('div');tr.className='btrack';
-    if(v<0){
-      const ng=document.createElement('div');ng.className='bneg';ng.style.width=pct+'%';
-      const nv=document.createElement('span');nv.className='bnegv';nv.textContent=v.toFixed(3);
-      ng.appendChild(nv);tr.appendChild(ng);
+  const vals   = MODELS.map(m => d[m.key]);
+  const maxAbs = Math.max(...vals.map(Math.abs), .001);
+
+  const posOnly = vals.filter(v => v >= 0);
+  const winner  = d.hi
+    ? MODELS[vals.indexOf(Math.max(...vals))].key
+    : MODELS[vals.indexOf(Math.min(...posOnly))].key;
+
+  MODELS.forEach((m, i) => {
+    const v   = d[m.key];
+    const pct = Math.max(0, Math.abs(v) / maxAbs * 100);
+
+    const row  = document.createElement('div'); row.className = 'brow';
+    const name = document.createElement('div'); name.className = 'bname'; name.textContent = m.label;
+    const tr   = document.createElement('div'); tr.className = 'btrack';
+
+    if (v < 0) {
+      const neg = document.createElement('div'); neg.className = 'bneg';
+      neg.style.width = pct + '%';
+      const nv = document.createElement('span'); nv.className = 'bnegv';
+      nv.textContent = v.toFixed(3);
+      neg.appendChild(nv); tr.appendChild(neg);
     } else {
-      const fl=document.createElement('div');fl.className='bfill';
-      fl.style.background=m.color;fl.style.width='0%';
-      const fv=document.createElement('span');fv.className='bfv';fv.textContent=v.toFixed(3);
-      fl.appendChild(fv);tr.appendChild(fl);
-      requestAnimationFrame(()=>setTimeout(()=>fl.style.width=pct+'%',120+i*80));
+      const fl = document.createElement('div'); fl.className = 'bfill';
+      fl.style.background = m.color; fl.style.width = '0%';
+      const fv = document.createElement('span'); fv.className = 'bfv';
+      fv.textContent = v.toFixed(3);
+      fl.appendChild(fv); tr.appendChild(fl);
+      requestAnimationFrame(() =>
+        setTimeout(() => fl.style.width = pct + '%', 100 + i * 80)
+      );
     }
-    const w=document.createElement('div');w.className='bwin';
-    if(m.key===winner){const s=document.createElement('span');s.className='star';s.textContent='★';w.appendChild(s);}
-    row.appendChild(nm);row.appendChild(tr);row.appendChild(w);
+
+    const win = document.createElement('div'); win.className = 'bwin';
+    if (m.key === winner) {
+      const s = document.createElement('span'); s.className = 'star'; s.textContent = '★';
+      win.appendChild(s);
+    }
+
+    row.appendChild(name); row.appendChild(tr); row.appendChild(win);
     el.appendChild(row);
   });
 }
-Object.keys(D).forEach(k=>makeBars(k,k));
 
-// RADAR
-(function(){
-  const c=document.getElementById('radar'),ctx=c.getContext('2d');
-  const W=c.width,H=c.height,cx=W/2,cy=H/2+8;
-  const R=Math.min(W,H)/2-80;
-  const AX=[
-    {l:'Recall@1',    proj:.5615,raw:.5655,distil:.841},
-    {l:'mAP',         proj:.3391,raw:.3396,distil:.5393},
-    {l:'5-Shot',      proj:.4325,raw:.4113,distil:.745},
-    {l:'MLP Probe',   proj:.55,  raw:.5625,distil:.83},
-    {l:'Recon Quality',proj:.8977,raw:.7962,distil:.0},
-    {l:'Semantic Gap', proj:.84,  raw:.50,  distil:.14},
-    {l:'Discriminab.', proj:.929, raw:.917, distil:1.0},
+Object.keys(DATA).forEach(k => makeBars(k, k));
+
+// ── RADAR ─────────────────────────────────────────────────────────────────────
+(function drawRadar() {
+  const canvas = document.getElementById('radar');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2 + 8;
+  const R  = Math.min(W, H) / 2 - 80;
+
+  const AXES = [
+    { l: 'Recall@1',     proj: .5615, raw: .5655, distil: .841  },
+    { l: 'mAP',          proj: .3391, raw: .3396, distil: .5393 },
+    { l: '5-Shot Acc',   proj: .4325, raw: .4113, distil: .745  },
+    { l: 'MLP Probe',    proj: .55,   raw: .5625, distil: .83   },
+    { l: 'Recon Qual.',  proj: .8977, raw: .7962, distil: .0    },
+    { l: 'Semantic Gap', proj: .84,   raw: .50,   distil: .14   },
+    { l: 'Discriminab.', proj: .929,  raw: .917,  distil: 1.0   },
   ];
-  const N=AX.length;
-  const angs=AX.map((_,i)=>Math.PI*2*i/N-Math.PI/2);
-  const pt=(v,i)=>[cx+R*v*Math.cos(angs[i]),cy+R*v*Math.sin(angs[i])];
 
-  [.25,.5,.75,1].forEach(r=>{
+  const N    = AXES.length;
+  const angs = AXES.map((_, i) => Math.PI * 2 * i / N - Math.PI / 2);
+  const pt   = (v, i) => [cx + R * v * Math.cos(angs[i]), cy + R * v * Math.sin(angs[i])];
+
+  // Rings
+  [.25, .5, .75, 1].forEach(r => {
     ctx.beginPath();
-    angs.forEach((a,i)=>{const x=cx+R*r*Math.cos(a),y=cy+R*r*Math.sin(a);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-    ctx.closePath();ctx.strokeStyle='#1c1c40';ctx.lineWidth=1;ctx.stroke();
-    ctx.fillStyle='#334155';ctx.font="400 10px 'IBM Plex Mono'";ctx.textAlign='left';
-    ctx.fillText((r*100).toFixed(0)+'%',cx+4,cy-R*r+4);
-  });
-  angs.forEach(a=>{ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+R*Math.cos(a),cy+R*Math.sin(a));ctx.strokeStyle='#1c1c40';ctx.lineWidth=1;ctx.stroke();});
-  AX.forEach((ax,i)=>{
-    const a=angs[i],lx=cx+(R+32)*Math.cos(a),ly=cy+(R+32)*Math.sin(a);
-    ctx.fillStyle='#64748b';ctx.font="500 11px 'Sora'";
-    ctx.textAlign=Math.abs(Math.cos(a))<.1?'center':Math.cos(a)<0?'right':'left';
-    ctx.fillText(ax.l,lx,ly+4);
-  });
-  [{key:'distil',color:'#f87171',a:.12},{key:'raw',color:'#38bdf8',a:.14},{key:'proj',color:'#a78bfa',a:.18}].forEach(m=>{
-    ctx.beginPath();
-    AX.forEach((ax,i)=>{const[x,y]=pt(ax[m.key],i);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+    angs.forEach((a, i) => {
+      const x = cx + R * r * Math.cos(a), y = cy + R * r * Math.sin(a);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
     ctx.closePath();
-    ctx.fillStyle=m.color+Math.round(m.a*255).toString(16).padStart(2,'0');ctx.fill();
-    ctx.strokeStyle=m.color;ctx.lineWidth=2;ctx.stroke();
-    AX.forEach((ax,i)=>{const[x,y]=pt(ax[m.key],i);ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle=m.color;ctx.fill();});
+    ctx.strokeStyle = '#1c1c40'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#334155';
+    ctx.font = "400 10px 'IBM Plex Mono'";
+    ctx.textAlign = 'left';
+    ctx.fillText((r * 100).toFixed(0) + '%', cx + 4, cy - R * r + 4);
   });
-  [{l:'T-JEPA (projected)',c:'#a78bfa'},{l:'T-JEPA (raw)',c:'#38bdf8'},{l:'DistilBERT',c:'#f87171'}].forEach((it,i)=>{
-    const lx=cx-220+i*160,ly=H-18;
-    ctx.beginPath();ctx.arc(lx+6,ly,5,0,Math.PI*2);ctx.fillStyle=it.c;ctx.fill();
-    ctx.fillStyle='#64748b';ctx.font="400 11px 'Sora'";ctx.textAlign='left';ctx.fillText(it.l,lx+16,ly+4);
+
+  // Spokes
+  angs.forEach(a => {
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + R * Math.cos(a), cy + R * Math.sin(a));
+    ctx.strokeStyle = '#1c1c40'; ctx.lineWidth = 1; ctx.stroke();
+  });
+
+  // Axis labels
+  AXES.forEach((ax, i) => {
+    const a  = angs[i];
+    const lx = cx + (R + 30) * Math.cos(a);
+    const ly = cy + (R + 30) * Math.sin(a);
+    ctx.fillStyle = '#64748b';
+    ctx.font = "500 11px 'Sora'";
+    ctx.textAlign = Math.abs(Math.cos(a)) < .1 ? 'center' : Math.cos(a) < 0 ? 'right' : 'left';
+    ctx.fillText(ax.l, lx, ly + 4);
+  });
+
+  // Polygons
+  [
+    { key: 'distil', color: '#f87171', alpha: .11 },
+    { key: 'raw',    color: '#38bdf8', alpha: .13 },
+    { key: 'proj',   color: '#a78bfa', alpha: .17 },
+  ].forEach(m => {
+    ctx.beginPath();
+    AXES.forEach((ax, i) => {
+      const [x, y] = pt(ax[m.key], i);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    const hex = Math.round(m.alpha * 255).toString(16).padStart(2, '0');
+    ctx.fillStyle = m.color + hex; ctx.fill();
+    ctx.strokeStyle = m.color; ctx.lineWidth = 2; ctx.stroke();
+    AXES.forEach((ax, i) => {
+      const [x, y] = pt(ax[m.key], i);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = m.color; ctx.fill();
+    });
+  });
+
+  // Legend
+  [
+    { l: 'T-JEPA (projected)', c: '#a78bfa' },
+    { l: 'T-JEPA (raw)',       c: '#38bdf8' },
+    { l: 'DistilBERT',         c: '#f87171' },
+  ].forEach((it, i) => {
+    const lx = cx - 220 + i * 160, ly = H - 18;
+    ctx.beginPath(); ctx.arc(lx + 6, ly, 5, 0, Math.PI * 2);
+    ctx.fillStyle = it.c; ctx.fill();
+    ctx.fillStyle = '#64748b';
+    ctx.font = "400 11px 'Sora'";
+    ctx.textAlign = 'left';
+    ctx.fillText(it.l, lx + 16, ly + 4);
   });
 })();
 </script>
