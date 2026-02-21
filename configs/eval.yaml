@@ -1,0 +1,253 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# configs/eval.yaml
+# T-JEPA Complete Evaluation Configuration
+#
+# Covers all 7 evaluation tasks:
+#   1. Semantic Similarity   (MRPC cosine gap)
+#   2. Linear Probe          (logistic regression, AG News)
+#   3. K-Means Clustering    (ARI / NMI / Silhouette)
+#   4. Retrieval             (Recall@K, mAP)
+#   5. Few-Shot              (1-shot / 5-shot nearest centroid)
+#   6. Predictive Consistency(context error, masked reconstruction)
+#   7. MLP Probe             (1-hidden-layer nonlinear probe)
+#
+# Usage:
+#   python eval/compare.py      --ckpt checkpoints/step_050000.pt --config configs/eval.yaml
+#   python eval/extended_eval.py --ckpt checkpoints/step_050000.pt --config configs/eval.yaml
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MODEL — must exactly match your training config
+# ─────────────────────────────────────────────────────────────────────────────
+model:
+  encoder_name:        distilbert-base-uncased   # HuggingFace model ID
+  hidden_size:         768                        # DistilBERT transformer output dim
+  proj_dim:            256                        # Projection head output dim (JEPA latent)
+  predictor_hidden_dim: 512                       # Predictor MLP width (not used at eval)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DATA — tokenisation settings shared across all tasks
+# ─────────────────────────────────────────────────────────────────────────────
+data:
+  max_length: 128     # Must match training max_length
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EVAL — all task settings
+# ─────────────────────────────────────────────────────────────────────────────
+eval:
+
+  # ── Global embedding settings ─────────────────────────────────────────────
+
+  embedding_layer: projected
+  # Options:
+  #   "projected" — 256-dim latents AFTER projection head  ← USE THIS
+  #                 This is where JEPA training signal was applied.
+  #   "raw"       — 768-dim hidden states BEFORE projection
+  #                 Apples-to-apples comparison with vanilla DistilBERT.
+
+  pool: cls
+  # Options:
+  #   "cls"  — [CLS] token at position 0.  Standard for BERT-family models.
+  #   "mean" — average over all non-padding tokens.  More robust sometimes.
+
+  batch_size: 256
+  # Inference-only batch size.  No optimizer state needed so can be 2× training.
+  # L4 (24 GB) handles 256 comfortably even at 128-token sequences.
+
+
+  # ── Baselines ─────────────────────────────────────────────────────────────
+  baselines:
+
+    distilbert_cls:
+      enabled: true
+      model_name: distilbert-base-uncased
+      pool: cls
+      description: "DistilBERT vanilla — CLS pooling"
+
+    distilbert_mean:
+      enabled: true
+      model_name: distilbert-base-uncased
+      pool: mean
+      description: "DistilBERT vanilla — mean pooling"
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 1 — Semantic Similarity
+  # ══════════════════════════════════════════════════════════════════════════
+  # Measures cosine similarity between paraphrase pairs vs unrelated pairs.
+  # Key metric: GAP = pos_sim - neg_sim.  Higher = better semantic separation.
+  # Dataset: GLUE MRPC (Microsoft Research Paraphrase Corpus)
+
+  similarity:
+    enabled: true
+    dataset:  glue
+    name:     mrpc
+    split:    test
+    n_pairs:  300       # Positive pairs loaded.  Same N negative pairs loaded too.
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 2 — Linear Probe Classification
+  # ══════════════════════════════════════════════════════════════════════════
+  # Logistic regression on frozen embeddings — zero fine-tuning.
+  # Standard SSL eval protocol (SimCLR, BYOL, I-JEPA all report this).
+  # Dataset: AG News 4-class (World / Sports / Business / Sci-Tech)
+  #
+  # Thresholds for AG News:
+  #   < 0.70 : poor representations
+  #   0.70–0.80 : acceptable
+  #   > 0.80 : good SSL pretraining
+
+  linear_probe:
+    enabled:     true
+    dataset:     ag_news
+    split:       test
+    n_per_class: 500      # Samples per class.  Total = 4 × 500 = 2 000.
+    train_ratio: 0.8      # 80 % train / 20 % test split
+    C:           1.0      # Logistic regression regularisation (inverse strength)
+    max_iter:    1000     # Solver iterations
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 3 — K-Means Clustering
+  # ══════════════════════════════════════════════════════════════════════════
+  # K-Means on frozen embeddings, compared to ground-truth labels.
+  # Measures whether the encoder naturally organises semantic topics.
+  # Dataset: AG News (same as linear probe)
+  #
+  # Metrics:
+  #   ARI  — Adjusted Rand Index.   0 = random, 1 = perfect.
+  #   NMI  — Normalised Mutual Info. 0 = none,   1 = perfect.
+  #   Sil  — Silhouette score.      -1 = bad,   +1 = perfect cluster separation.
+  #
+  # Threshold:
+  #   ARI > 0.5 : model learned topic structure without supervision
+
+  clustering:
+    enabled:          true
+    dataset:          ag_news
+    n_clusters:       4       # Must equal number of classes
+    n_init:           10      # K-Means random restarts (higher = more stable)
+    max_iter:         300
+    silhouette_sample: 3000   # Subsample for silhouette (O(N²) otherwise)
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 4 — Retrieval  (Recall@K + mAP)
+  # ══════════════════════════════════════════════════════════════════════════
+  # For each query embedding, rank all others by cosine similarity.
+  # "Relevant" = same class label.
+  #
+  # Recall@K  : fraction of queries where ≥1 relevant item is in top-K.
+  #   Recall@1  = nearest neighbour accuracy (strict).
+  #   Recall@5  = at least one correct match in top 5.
+  #   Recall@10 = at least one correct match in top 10.
+  #
+  # mAP (Mean Average Precision):
+  #   Rewards finding relevant items early in the ranked list.
+  #   Higher mAP = correct items consistently near the top.
+  #
+  # Dataset: AG News (shared with clustering)
+  #
+  # Thresholds:
+  #   Recall@1 > 0.70 : strong nearest-neighbour retrieval
+  #   mAP > 0.60      : solid ranking quality
+
+  retrieval:
+    enabled: true
+    ks: [1, 5, 10]    # K values for Recall@K
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 5 — Few-Shot Classification  (1-shot / 5-shot)
+  # ══════════════════════════════════════════════════════════════════════════
+  # N-way K-shot with nearest-centroid head (zero trainable parameters).
+  # Measures how well the encoder captures class identity from very few examples.
+  #
+  # Protocol per episode:
+  #   1. Sample K support embeddings per class → compute class centroid
+  #   2. Classify query embeddings by cosine similarity to centroids
+  #   3. Average accuracy over n_episodes random episodes
+  #
+  # Why nearest centroid?
+  #   Zero parameters — all quality comes from the encoder, not the head.
+  #   This is the strictest possible few-shot evaluation.
+  #
+  # Reading results:
+  #   1-shot ≈ 5-shot : representations are very clustered (good)
+  #   5-shot >> 1-shot: representations are noisy but class-separable
+  #   5-shot ≈ linear_probe acc : embeddings are linearly separable (ideal SSL)
+
+  few_shot:
+    enabled:    true
+    shots:      [1, 5]    # K values to evaluate
+    n_episodes: 200       # Random episodes to average over (more = stable estimate)
+    n_way:      4         # Number of classes per episode (use all 4 AG News classes)
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 6 — Predictive Consistency
+  # ══════════════════════════════════════════════════════════════════════════
+  # Two sub-metrics that directly probe the JEPA training objective.
+  #
+  # Sub-metric A: Context → Future Embedding Error
+  #   L2 distance between embed(s1) and embed(s2) for:
+  #     - related pairs   (MRPC paraphrase,  label=1) → should be LOW
+  #     - unrelated pairs (MRPC non-match,   label=0) → should be HIGH
+  #   Discriminability = unrelated_error / related_error  (higher = better)
+  #
+  # Sub-metric B: Masked-Span Reconstruction Error
+  #   Mask a random span in a sentence → compare embed(masked) vs embed(clean)
+  #   L2 distance in embedding space.
+  #   Lower = encoder predicts masked content well = JEPA objective is working.
+  #   Recon quality = 1 - (masked_error / random_baseline_error)
+  #     0.0 = as bad as random,  1.0 = perfect reconstruction
+  #
+  # Dataset: MRPC pairs (both sub-metrics)
+
+  predictive_consistency:
+    enabled:          true
+    n_pairs:          300     # MRPC pairs to use
+    masked_span_min:  5       # Minimum tokens to mask for reconstruction test
+    masked_span_max:  10      # Maximum tokens to mask
+    n_reconstruction: 100     # Sentences to use for reconstruction error
+
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # TASK 7 — MLP Probe  (1 hidden layer, nonlinear)
+  # ══════════════════════════════════════════════════════════════════════════
+  # Shallow MLP trained on frozen embeddings.
+  # Goes one step beyond linear probe by allowing nonlinear decision boundaries.
+  #
+  # Architecture: Linear(emb_dim → hidden_dim) → ReLU → Dropout → Linear(→ n_classes)
+  # Training: Adam, cross-entropy loss, fixed epochs on pre-extracted embeddings.
+  # Fast: no backprop through encoder, just the small MLP head.
+  #
+  # How to read the results:
+  #   MLP acc ≈ linear acc : representations are already linearly separable.
+  #                          SSL pretraining is working well.
+  #   MLP acc >> linear acc: class structure exists but is nonlinear.
+  #                          Encoder needs more training or different objective.
+  #   Both low             : representations don't encode class information.
+  #
+  # Dataset: AG News (same split as linear probe for direct comparison)
+
+  mlp_probe:
+    enabled:    true
+    hidden_dim: 256     # MLP hidden layer width
+    n_epochs:   50      # Training epochs (fast — no encoder backprop)
+    lr:         1.0e-3  # Adam learning rate
+    dropout:    0.1     # Dropout on hidden layer
+    dataset:    ag_news
+
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # OUTPUT
+  # ─────────────────────────────────────────────────────────────────────────
+  output:
+    compare_json:  eval/results/comparison.json   # compare.py output
+    extended_json: eval/results/extended.json     # extended_eval.py output
+    print_table:   true
